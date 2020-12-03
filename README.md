@@ -1,1 +1,1 @@
-# django-instagram-search
+# Django Instagram Search User
