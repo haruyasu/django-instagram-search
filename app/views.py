@@ -4,6 +4,7 @@ from django.conf import settings
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
+from datetime import date
 import requests
 import json
 import pandas as pd
@@ -42,10 +43,17 @@ def get_account_info(params):
     # https://graph.facebook.com/{graph-api-version}/{ig-user-id}?fields={fields}&access_token={access-token}
 
     endpoint_params = {}
-    # ユーザ名、プロフィール画像、フォロワー数、フォロー数、投稿数、メディア情報取得
-    endpoint_params['fields'] = 'business_discovery.username(' + params['ig_username'] + '){\
-        username,profile_picture_url,follows_count,followers_count,media_count,\
-        media.limit(10){comments_count,like_count,caption,media_url,permalink,timestamp,media_type,children{media_url,media_type}}}'
+    # ユーザ名、プロフィール画像、フォロワー数、フォロー数、投稿数
+    endpoint_params['fields'] = 'business_discovery.username(' + params['ig_username'] + '){username,profile_picture_url,follows_count,followers_count,media_count}'
+    endpoint_params['access_token'] = params['access_token']
+    url = params['endpoint_base'] + params['instagram_account_id']
+    return call_api(url, endpoint_params)
+
+
+# ページ送り
+def get_pagenate_account_info(params):
+    endpoint_params = {}
+    endpoint_params['fields'] = 'business_discovery.username(' + params['ig_username'] + '){media.after(' + params['after_key'] + ').limit(1000){timestamp}}'
     endpoint_params['access_token'] = params['access_token']
     url = params['endpoint_base'] + params['instagram_account_id']
     return call_api(url, endpoint_params)
@@ -55,8 +63,7 @@ def search_account(url, keyword):
     options = Options()
     options.add_argument('--headless')  # バックグランドで実行
     options.add_argument('--no-sandbox')  # chrootで隔離された環境(Sandbox)での動作を無効
-    # 共有メモリファイルの場所を/dev/shmから/tmpに移動
-    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-dev-shm-usage') # 共有メモリファイルの場所を/dev/shmから/tmpに移動
     options.add_argument('--disable-gpu')
     driver = webdriver.Chrome('/usr/local/bin/chromedriver', chrome_options=options)
     driver.get(url)
@@ -96,10 +103,8 @@ def get_user_id(driver):
         # ページ送りを試す
         try:
             driver.find_element_by_xpath(f"//div[@id='___gcse_1']/div/div/div/div[5]/div[2]/div/div/div[2]/div/div[{i}]").click()
-            print('次のページに行きます。')
             time.sleep(2)
         except:
-            print('ページがなくなりました')
             break
         i += 1
         # アカウントのurlリストからuser_idの部分を取得　m.group(1)
@@ -120,6 +125,7 @@ class IndexView(View):
         url = 'https://makitani.net/igusersearch/'
         media_count = 1000
         followers_count = 100
+        this_year = 1
 
         driver = search_account(url, keyword)
 
@@ -139,14 +145,38 @@ class IndexView(View):
                 business_discovery = account_response['json_data']['business_discovery']
 
                 if business_discovery['media_count'] <= media_count and business_discovery['followers_count'] >= followers_count:
-                    user_list.append([
-                        user_id,
-                        business_discovery['profile_picture_url'],
-                        business_discovery['followers_count'],
-                        business_discovery['follows_count'],
-                        business_discovery['media_count'],
-                        'https://www.instagram.com/' + user_id
-                    ])
+                    if this_year == 0:
+                        user_list.append([
+                            user_id,
+                            business_discovery['profile_picture_url'],
+                            business_discovery['followers_count'],
+                            business_discovery['follows_count'],
+                            business_discovery['media_count'],
+                            'https://www.instagram.com/' + user_id
+                        ])
+                    else:
+                        try:
+                            after_key = business_discovery['media']['paging']['cursors']['after']
+                        except KeyError:
+                            after_key = []
+                        params['after_key'] = after_key
+                        pagenate_account_response = get_pagenate_account_info(params)
+                        # ページ送り後の最後尾のタイムスタンプ取得
+                        timestamp = pagenate_account_response['json_data']['business_discovery']['media']['data'][-1]['timestamp']
+                        m = re.search('((\d{4})-\d{2}-\d{2}).*', timestamp)
+
+                        # 最後のタイムスタンプから西暦m.group(2)を取得（文字列）
+                        # もしも西暦が今年ならば
+                        if m.group(2) == date.today().strftime('%Y'):
+                            user_list.append([
+                                user_id,
+                                business_discovery['profile_picture_url'],
+                                business_discovery['followers_count'],
+                                business_discovery['follows_count'],
+                                business_discovery['media_count'],
+                                'https://www.instagram.com/' + user_id
+                            ])
+
             except KeyError:
                 pass
 
@@ -161,14 +191,14 @@ class IndexView(View):
         #         'https://www.instagram.com/hathle/'
         #     ])
 
-        # user_data = pd.DataFrame(user_list, columns=[
-        #     'username',
-        #     'profile_picture_url',
-        #     'followers_count',
-        #     'follows_count',
-        #     'media_count',
-        #     'link'
-        # ])
+        user_data = pd.DataFrame(user_list, columns=[
+            'username',
+            'profile_picture_url',
+            'followers_count',
+            'follows_count',
+            'media_count',
+            'link'
+        ])
 
         # フォロワー数で並び替え
         user_data = user_data.sort_values(['followers_count'], ascending=[False])
@@ -178,4 +208,5 @@ class IndexView(View):
             'keyword': keyword,
             'media_count': media_count,
             'followers_count': followers_count,
+            'this_year': this_year
         })
