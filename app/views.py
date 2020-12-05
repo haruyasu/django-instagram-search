@@ -1,10 +1,12 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.views.generic import View
 from django.conf import settings
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
-from datetime import date
+from datetime import datetime, date
+from dateutil import relativedelta
+from .forms import KeywordForm
 import requests
 import json
 import pandas as pd
@@ -43,8 +45,10 @@ def get_account_info(params):
     # https://graph.facebook.com/{graph-api-version}/{ig-user-id}?fields={fields}&access_token={access-token}
 
     endpoint_params = {}
-    # ユーザ名、プロフィール画像、フォロワー数、フォロー数、投稿数
-    endpoint_params['fields'] = 'business_discovery.username(' + params['ig_username'] + '){username,profile_picture_url,follows_count,followers_count,media_count}'
+    # ユーザ名、プロフィール画像、フォロワー数、フォロー数、投稿数、メディア情報取得
+    endpoint_params['fields'] = 'business_discovery.username(' + params['ig_username'] + '){\
+        username,profile_picture_url,follows_count,followers_count,media_count,\
+        media.limit(10){comments_count,like_count,caption,media_url,permalink,timestamp,media_type,children{media_url,media_type}}}'
     endpoint_params['access_token'] = params['access_token']
     url = params['endpoint_base'] + params['instagram_account_id']
     return call_api(url, endpoint_params)
@@ -103,8 +107,10 @@ def get_user_id(driver):
         # ページ送りを試す
         try:
             driver.find_element_by_xpath(f"//div[@id='___gcse_1']/div/div/div/div[5]/div[2]/div/div/div[2]/div/div[{i}]").click()
+            print('次のページに行きます。')
             time.sleep(2)
         except:
+            print('ページがなくなりました')
             break
         i += 1
         # アカウントのurlリストからuser_idの部分を取得　m.group(1)
@@ -120,54 +126,62 @@ def get_user_id(driver):
 
 class IndexView(View):
     def get(self, request, *args, **kwargs):
+        # 検索フォーム
+        form = KeywordForm(
+            request.POST or None,
+            # フォームに初期値を設定
+            initial={
+                'media_count': 1000, # 投稿数
+                'followers_count': 100, # フォロワー数
+                'this_year': 0, # 今年中のアカウントかどうか
+            }
+        )
 
-        keyword = 'タピオカ+淡路島'
-        url = 'https://makitani.net/igusersearch/'
-        media_count = 1000
-        followers_count = 100
-        this_year = 1
+        return render(request, 'app/index.html', {
+            'form': form
+        })
 
-        driver = search_account(url, keyword)
+    def post(self, request, *args, **kwargs):
+        # キーワード検索
+        form = KeywordForm(request.POST or None)
 
-        user_ids = get_user_id(driver)
+        # フォームのバリデーション
+        if form.is_valid():
+            # フォームからデータを取得
+            keyword = form.cleaned_data['keyword']
+            media_count = form.cleaned_data['media_count']
+            followers_count = form.cleaned_data['followers_count']
+            created_at = form.cleaned_data['created_at']
 
-        # Instagram Graph API認証情報取得
-        params = get_credentials()
+            # keyword = 'タピオカ+淡路島'
+            # media_count = 1000
+            # followers_count = 100
+            # created_at = 1
 
-        user_list = []
+            url = 'https://makitani.net/igusersearch/'
 
-        for user_id in user_ids:
-            params['ig_username'] = user_id
+            driver = search_account(url, keyword)
 
-            try:
-                # アカウント情報取得
-                account_response = get_account_info(params)
-                business_discovery = account_response['json_data']['business_discovery']
+            user_ids = get_user_id(driver)
+            print(user_ids)
 
-                if business_discovery['media_count'] <= media_count and business_discovery['followers_count'] >= followers_count:
-                    if this_year == 0:
-                        user_list.append([
-                            user_id,
-                            business_discovery['profile_picture_url'],
-                            business_discovery['followers_count'],
-                            business_discovery['follows_count'],
-                            business_discovery['media_count'],
-                            'https://www.instagram.com/' + user_id
-                        ])
-                    else:
-                        try:
-                            after_key = business_discovery['media']['paging']['cursors']['after']
-                        except KeyError:
-                            after_key = []
-                        params['after_key'] = after_key
-                        pagenate_account_response = get_pagenate_account_info(params)
-                        # ページ送り後の最後尾のタイムスタンプ取得
-                        timestamp = pagenate_account_response['json_data']['business_discovery']['media']['data'][-1]['timestamp']
-                        m = re.search('((\d{4})-\d{2}-\d{2}).*', timestamp)
+            # Instagram Graph API認証情報取得
+            params = get_credentials()
 
-                        # 最後のタイムスタンプから西暦m.group(2)を取得（文字列）
-                        # もしも西暦が今年ならば
-                        if m.group(2) == date.today().strftime('%Y'):
+            user_list = []
+
+            for user_id in user_ids:
+                params['ig_username'] = user_id
+
+                try:
+                    # アカウント情報取得
+                    account_response = get_account_info(params)
+                    business_discovery = account_response['json_data']['business_discovery']
+                    print(business_discovery)
+                    print(created_at)
+
+                    if business_discovery['media_count'] <= media_count and business_discovery['followers_count'] >= followers_count:
+                        if created_at:
                             user_list.append([
                                 user_id,
                                 business_discovery['profile_picture_url'],
@@ -176,37 +190,61 @@ class IndexView(View):
                                 business_discovery['media_count'],
                                 'https://www.instagram.com/' + user_id
                             ])
+                        else:
+                            try:
+                                after_key = business_discovery['media']['paging']['cursors']['after']
+                            except KeyError:
+                                after_key = []
+                            params['after_key'] = after_key
+                            pagenate_account_response = get_pagenate_account_info(params)
+                            timestamp = pagenate_account_response['json_data']['business_discovery']['media']['data'][-1]['timestamp']
+                            m = re.search('((\d{4})-\d{2}-\d{2}).*', timestamp)
+                            created = (datetime.strptime(m.group(1), '%Y-%m-%d')).date()
+                            last_year = date.today() - relativedelta.relativedelta(years=2)
+                            print(created, last_year)
 
-            except KeyError:
-                pass
+                            if created >= last_year:
+                                user_list.append([
+                                    user_id,
+                                    business_discovery['profile_picture_url'],
+                                    business_discovery['followers_count'],
+                                    business_discovery['follows_count'],
+                                    business_discovery['media_count'],
+                                    'https://www.instagram.com/' + user_id
+                                ])
 
-        # user_list = []
-        # for i in range(2):
-        #     user_list.append([
-        #         'hathle',
-        #         'https://placehold.jp/150x150.png',
-        #         '111111',
-        #         '2222',
-        #         '233',
-        #         'https://www.instagram.com/hathle/'
-        #     ])
+                except KeyError:
+                    pass
 
-        user_data = pd.DataFrame(user_list, columns=[
-            'username',
-            'profile_picture_url',
-            'followers_count',
-            'follows_count',
-            'media_count',
-            'link'
-        ])
+            # user_list = []
+            # for i in range(2):
+            #     user_list.append([
+            #         'hathle',
+            #         'https://placehold.jp/150x150.png',
+            #         '111111',
+            #         '2222',
+            #         '233',
+            #         'https://www.instagram.com/hathle/'
+            #     ])
 
-        # フォロワー数で並び替え
-        user_data = user_data.sort_values(['followers_count'], ascending=[False])
+            user_data = pd.DataFrame(user_list, columns=[
+                'username',
+                'profile_picture_url',
+                'followers_count',
+                'follows_count',
+                'media_count',
+                'link'
+            ])
 
-        return render(request, 'app/index.html', {
-            'user_data': user_data,
-            'keyword': keyword,
-            'media_count': media_count,
-            'followers_count': followers_count,
-            'this_year': this_year
-        })
+            # フォロワー数で並び替え
+            user_data = user_data.sort_values(['followers_count'], ascending=[False])
+
+            return render(request, 'app/keyword.html', {
+                'user_data': user_data,
+                'keyword': keyword,
+                'media_count': media_count,
+                'followers_count': followers_count,
+                'created_at': created_at
+            })
+        else:
+            redirect('index')

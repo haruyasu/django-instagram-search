@@ -1,43 +1,55 @@
 {% extends "app/base.html" %}
+{% load widget_tweaks %}
 
 {% block content %}
 
-<h4 class="mb-3">アカウント検索結果</h4>
+<h2 class="my-4">アカウント検索</h2>
 
-<p>キーワード：「<span class="font-weight-bold text-danger">{{ keyword }}</span>」</p>
-<p><span class="font-weight-bold text-danger">{{ media_count }}</span> 投稿以下</p>
-<p><span class="font-weight-bold text-danger">{{ followers_count }}</span> フォロワー以上</p>
-{% if this_year %}
-<p>今年中のアカウント</p>
-{% endif %}
-
-{% for index, row in user_data.iterrows %}
-
-<div class="card mb-2">
-    <div class="card-body">
-        <div class="d-flex align-items-center">
-            <div class="mr-3 profile">
-                <a class="d-flex flex-column justify-content-center align-items-center" href="{{ row.link }}" target="_blank">
-                    <img class="rounded-circle" src="{{ row.profile_picture_url }}" alt="" width="70">
-                    <div class="font-weight-bold">{{ row.username }}</div>
-                </a>
-            </div>
-            <div class="mr-3 text-center">
-                <h4>{{ row.media_count }}</h4>
-                <div class="text-secondary">投稿</div>
-            </div>
-            <div class="mr-3 text-center">
-                <h4>{{ row.followers_count }}</h4>
-                <div class="text-secondary">フォロワー</div>
-            </div>
-            <div class="text-center">
-                <h4>{{ row.follows_count }}</h4>
-                <div class="text-secondary">フォロー中</div>
-            </div>
-        </div>
-    </div>
+<div class="table-responsive search-table">
+    <table class="table">
+        <form method="post">
+            {% csrf_token %}
+            <tbody>
+                <tr>
+                    <th scope="row">
+                        <label class="control-label" for="comment">検索キーワード(複数：〇〇+〇〇)</label>
+                    </th>
+                    <td>
+                        {% render_field form.keyword class="form-control" placeholder="キーワードを入力" %}
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">
+                        <label class="control-label" for="comment">投稿数</label>
+                    </th>
+                    <td>
+                        {% render_field form.media_count class="form-control" placeholder="投稿数" %}
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">
+                        <label class="control-label" for="comment">フォロワー数</label>
+                    </th>
+                    <td>
+                        {% render_field form.followers_count class="form-control" placeholder="フォロワー数" %}
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">
+                        <label class="control-label" for="comment">アカウント開設日</label>
+                    </th>
+                    <td>
+                        {% render_field form.created_at class="form-control" placeholder="アカウント開設日" %}
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="2" class="text-center">
+                        <button class="btn btn-warning" type="submit">検索する</button>
+                    </td>
+                </tr>
+            </tbody>
+        </form>
+    </table>
 </div>
-
-{% endfor %}
 
 {% endblock %}
