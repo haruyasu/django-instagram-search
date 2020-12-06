@@ -133,7 +133,8 @@ class IndexView(View):
             initial={
                 'media_count': 1000, # 投稿数
                 'followers_count': 1000, # フォロワー数
-                'created_at': 1, # 今年中のアカウントかどうか
+                'created_at': 1, # 最近アカウントかどうか
+                'year': 1, # 何年前か
             }
         )
 
@@ -152,6 +153,7 @@ class IndexView(View):
             media_count = form.cleaned_data['media_count']
             followers_count = form.cleaned_data['followers_count']
             created_at = int(form.cleaned_data['created_at'])
+            year = int(form.cleaned_data['year'])
 
             url = 'https://makitani.net/igusersearch/'
 
@@ -194,8 +196,8 @@ class IndexView(View):
                             m = re.search('((\d{4})-\d{2}-\d{2}).*', timestamp)
                             # アカウント開設日を取得
                             created = (datetime.strptime(m.group(1), '%Y-%m-%d')).date()
-                            # 1年前を取得
-                            last_year = date.today() - relativedelta.relativedelta(years=1)
+                            # 〇年前を取得
+                            last_year = date.today() - relativedelta.relativedelta(years=year)
 
                             # 1年以内に開設したアカウントかを判定
                             if created >= last_year:
@@ -228,7 +230,8 @@ class IndexView(View):
                 'keyword': keyword,
                 'media_count': media_count,
                 'followers_count': followers_count,
-                'created_at': created_at
+                'created_at': created_at,
+                'year': year,
             })
         else:
             redirect('index')

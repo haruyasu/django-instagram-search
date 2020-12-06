@@ -8,7 +8,7 @@
 <p><span class="font-weight-bold text-danger">{{ media_count }}</span> 投稿以下</p>
 <p><span class="font-weight-bold text-danger">{{ followers_count }}</span> フォロワー以上</p>
 {% if created_at == 1 %}
-    <p>1年以内に開設されたアカウント</p>
+    <p>{{ year }}年以内に開設されたアカウント</p>
 {% endif %}
 
 {% for index, row in user_data.iterrows %}
