@@ -132,8 +132,8 @@ class IndexView(View):
             # フォームに初期値を設定
             initial={
                 'media_count': 1000, # 投稿数
-                'followers_count': 100, # フォロワー数
-                'this_year': 0, # 今年中のアカウントかどうか
+                'followers_count': 1000, # フォロワー数
+                'created_at': 1, # 今年中のアカウントかどうか
             }
         )
 
@@ -151,19 +151,13 @@ class IndexView(View):
             keyword = form.cleaned_data['keyword']
             media_count = form.cleaned_data['media_count']
             followers_count = form.cleaned_data['followers_count']
-            created_at = form.cleaned_data['created_at']
-
-            # keyword = 'タピオカ+淡路島'
-            # media_count = 1000
-            # followers_count = 100
-            # created_at = 1
+            created_at = int(form.cleaned_data['created_at'])
 
             url = 'https://makitani.net/igusersearch/'
 
             driver = search_account(url, keyword)
 
             user_ids = get_user_id(driver)
-            print(user_ids)
 
             # Instagram Graph API認証情報取得
             params = get_credentials()
@@ -177,11 +171,9 @@ class IndexView(View):
                     # アカウント情報取得
                     account_response = get_account_info(params)
                     business_discovery = account_response['json_data']['business_discovery']
-                    print(business_discovery)
-                    print(created_at)
 
                     if business_discovery['media_count'] <= media_count and business_discovery['followers_count'] >= followers_count:
-                        if created_at:
+                        if created_at == 0:
                             user_list.append([
                                 user_id,
                                 business_discovery['profile_picture_url'],
@@ -197,12 +189,15 @@ class IndexView(View):
                                 after_key = []
                             params['after_key'] = after_key
                             pagenate_account_response = get_pagenate_account_info(params)
+                            # 最初に投稿された日を取得
                             timestamp = pagenate_account_response['json_data']['business_discovery']['media']['data'][-1]['timestamp']
                             m = re.search('((\d{4})-\d{2}-\d{2}).*', timestamp)
+                            # アカウント開設日を取得
                             created = (datetime.strptime(m.group(1), '%Y-%m-%d')).date()
-                            last_year = date.today() - relativedelta.relativedelta(years=2)
-                            print(created, last_year)
+                            # 1年前を取得
+                            last_year = date.today() - relativedelta.relativedelta(years=1)
 
+                            # 1年以内に開設したアカウントかを判定
                             if created >= last_year:
                                 user_list.append([
                                     user_id,
@@ -215,17 +210,6 @@ class IndexView(View):
 
                 except KeyError:
                     pass
-
-            # user_list = []
-            # for i in range(2):
-            #     user_list.append([
-            #         'hathle',
-            #         'https://placehold.jp/150x150.png',
-            #         '111111',
-            #         '2222',
-            #         '233',
-            #         'https://www.instagram.com/hathle/'
-            #     ])
 
             user_data = pd.DataFrame(user_list, columns=[
                 'username',

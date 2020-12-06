@@ -7,7 +7,7 @@
 <p>キーワード：「<span class="font-weight-bold text-danger">{{ keyword }}</span>」</p>
 <p><span class="font-weight-bold text-danger">{{ media_count }}</span> 投稿以下</p>
 <p><span class="font-weight-bold text-danger">{{ followers_count }}</span> フォロワー以上</p>
-{% if created_at %}
+{% if created_at == 1 %}
     <p>1年以内に開設されたアカウント</p>
 {% endif %}
 
@@ -37,7 +37,7 @@
         </div>
     </div>
     {% empty %}
-    <h4>検索にヒットした動画はありません</h4>
+    <h4>検索にヒットしたアカウントはありません</h4>
 {% endfor %}
 
 {% endblock %}

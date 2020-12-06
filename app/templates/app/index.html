@@ -20,7 +20,7 @@
                 </tr>
                 <tr>
                     <th scope="row">
-                        <label class="control-label" for="comment">投稿数</label>
+                        <label class="control-label" for="comment">投稿数(以内)</label>
                     </th>
                     <td>
                         {% render_field form.media_count class="form-control" placeholder="投稿数" %}
@@ -28,7 +28,7 @@
                 </tr>
                 <tr>
                     <th scope="row">
-                        <label class="control-label" for="comment">フォロワー数</label>
+                        <label class="control-label" for="comment">フォロワー数(以上)</label>
                     </th>
                     <td>
                         {% render_field form.followers_count class="form-control" placeholder="フォロワー数" %}
@@ -51,5 +51,7 @@
         </form>
     </table>
 </div>
+
+<p>※キーワードによっては検索に時間がかかります。</p>
 
 {% endblock %}
